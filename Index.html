@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>工時記錄</title>
+  <style>
+    :root {
+      --primary: #007aff;
+      --bg: #f2f2f7;
+      --card: #ffffff;
+      --text: #1c1c1e;
+      --sub: #8e8e93;
+      --danger: #ff3b30;
+      --border: #e5e5ea;
+      --disabled-bg: #e5e5ea;
+      --tag-holiday: #ff9500;
+      --tag-rest: #5856d6;
+      --success: #34c759;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    h2 { font-size: 18px; margin: 0 0 12px 0; }
+    label { font-size: 13px; color: var(--sub); display: block; margin-bottom: 4px; font-weight: 500; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    input, select {
+      width: 100%;
+      height: 42px;
+      font-size: 16px;
+      padding: 0 10px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-sizing: border-box;
+      background-color: #fafafa;
+    }
+    input:read-only {
+      background-color: var(--disabled-bg);
+      color: #666;
+      cursor: not-allowed;
+    }
+    button {
+      width: 100%;
+      height: 44px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      background-color: var(--primary);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:active { opacity: 0.8; }
+    .btn-secondary {
+      background-color: #5856d6;
+      font-size: 14px;
+      height: 38px;
+      margin-top: 8px;
+    }
+    .btn-export {
+      background-color: var(--success);
+      font-size: 15px;
+      height: 40px;
+      margin-top: 8px;
+    }
+    .btn-backup {
+      background-color: #8e8e93;
+      font-size: 14px;
+      height: 38px;
+    }
+    .btn-restore {
+      background-color: #ff9500;
+      font-size: 14px;
+      height: 38px;
+    }
+    .stat-card {
+      background: #eef7ff;
+      border: 1px solid #cce5ff;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; }
+    .stat-sub-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+      font-size: 13px;
+      color: #555;
+      padding-left: 12px;
+    }
+    .divider {
+      border-top: 1px dashed #b8daff;
+      margin: 8px 0;
+    }
+    .stat-total {
+      font-size: 16px;
+      font-weight: bold;
+      color: var(--primary);
+    }
+    .stat-grand-total {
+      font-size: 17px;
+      font-weight: bold;
+      color: #d70015;
+    }
+    .record-item {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .record-item:last-child { border-bottom: none; }
+    .action-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+      margin-left: 10px;
+    }
+    .text-btn {
+      background: none;
+      border: none;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 2px 6px;
+      text-align: right;
+    }
+    .edit-btn { color: var(--primary); }
+    .del-btn { color: var(--danger); }
+    .task-desc {
+      font-size: 13px;
+      color: #333;
+      margin-top: 3px;
+      background: #f8f9fa;
+      padding: 4px 6px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #fff;
+      display: inline-block;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+    .badge-normal { background: #34c759; }
+    .badge-rest { background: var(--tag-rest); }
+    .badge-holiday { background: var(--tag-holiday); }
+    .badge-special { background: #ff2d55; }
+  </style>
+</head>
+<body>
+
+  <!-- 輸入區塊 -->
+  <div class="card">
+    <h2>每日工時輸入</h2>
+    <div class="grid-2">
+      <div>
+        <label>日薪 (元)</label>
+        <input type="number" id="dailyRate" value="2200" placeholder="例：2100">
+      </div>
+      <div>
+        <label>換算時薪 (日薪 ÷ 8)</label>
+        <input type="text" id="hourlyRateDisplay" readonly value="262.5 元">
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <label>工作日期</label>
+        <input type="date" id="workDate">
+      </div>
+      <div>
+        <label>當日出勤類別</label>
+        <select id="dayType">
+          <option value="normal">平日上班 (常態)</option>
+          <option value="rest">休息日加班 (一休)</option>
+          <option value="holiday">例假日出勤 (一例)</option>
+          <option value="special">特殊節日 (全日雙倍薪)</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label>工作內容 / 案名</label>
+      <input type="text" id="workNote" placeholder="例：線路查修、管路維護">
+    </div>
+
+    <div class="grid-2">
+      <div>
+        <label>上班時間</label>
+        <input type="time" id="startTime" value="08:00">
+      </div>
+      <div>
+        <label>下班時間</label>
+        <input type="time" id="endTime" value="17:00">
+      </div>
+    </div>
+<!--
+    <div class="grid-2">
+      <div>
+        <label>休息扣除 (小時)</label>
+        <input type="number" id="breakHours" value="1.0" step="0.5">
+      </div>
+      <div>
+        <label>常態基準 (小時)</label>
+        <input type="number" id="normalHours" value="8" step="0.5">
+      </div>
+    </div>
+-->
+    <button id="saveBtn">計算並儲存</button>
+  </div>
+
+  <!-- 月報查詢區塊 -->
+  <div class="card">
+    <h2>月報查詢與歷史</h2>
+    <label>選擇查詢月份</label>
+    <input type="month" id="filterMonth">
+
+    <div class="stat-card">
+      <div class="stat-row">
+        <span>出勤天數：</span>
+        <span id="sumDays">0 天</span>
+      </div>
+      <div class="stat-row">
+        <span>出勤日薪本俸概算：</span>
+        <span id="sumBasePay">NT$ 0</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="stat-row" style="font-weight: 600;">
+        <span>加班與加成時數明細：</span>
+        <span id="sumTotalOt">0 小時</span>
+      </div>
+      <div class="stat-sub-row">
+        <span>├ 1.34 倍時數：</span>
+        <span id="sumOt134">0 小時</span>
+      </div>
+      <div class="stat-sub-row">
+        <span>├ 1.67 倍時數：</span>
+        <span id="sumOt167">0 小時</span>
+      </div>
+      <div class="stat-sub-row">
+        <span>├ 2.00 倍時數 (特殊節日)：</span>
+        <span id="sumOt200">0 小時</span>
+      </div>
+      <div class="stat-sub-row">
+        <span>└ 2.67 倍時數 (休息日第9h起)：</span>
+        <span id="sumOt267">0 小時</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="stat-row">
+        <span>加班天數 (餐費累計)：</span>
+        <span id="sumMealDays">0 天 (NT$ 0)</span>
+      </div>
+      <div class="stat-row stat-total">
+        <span>預估額外加班/加發津貼 (含餐費)：</span>
+        <span id="sumExtraPay">NT$ 0</span>
+      </div>
+      <div class="stat-row stat-grand-total" style="margin-top: 6px;">
+        <span>本月預估應領總合：</span>
+        <span id="sumGrandTotal">NT$ 0</span>
+      </div>
+    </div>
+
+    <!-- 匯出與備份功能群 -->
+    <button id="exportCsvBtn" class="btn-export">📥 匯出當月報表 (Excel / CSV)</button>
+    <button id="recalcMonthBtn" class="btn-secondary">依最新設定重新計算本月歷史</button>
+
+    <div class="grid-2" style="margin-top: 8px;">
+      <button id="backupBtn" class="btn-backup">📤 備份資料 (JSON)</button>
+      <button id="restoreBtn" class="btn-restore">📥 還原資料</button>
+    </div>
+    <input type="file" id="restoreFileInput" accept=".json" style="display: none;">
+
+    <div id="recordList" style="margin-top: 12px;"></div>
+  </div>
+  <script>
+  // 全域錯誤自動提醒，防止靜默失效
+  window.onerror = function(msg, url, line) {
+    alert("執行報錯：\n" + msg + "\n發生在第 " + line + " 行");
+    return false;
+  };
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+    const monthStr = `${year}-${month}`;
+
+    // 安全抓取核心元件
+    const getEl = (id) => document.getElementById(id);
+    const getVal = (id, defaultVal = '') => {
+      const el = getEl(id);
+      return el ? el.value : defaultVal;
+    };
+
+    const workDateInput = getEl('workDate');
+    const filterMonthInput = getEl('filterMonth');
+    const dailyInput = getEl('dailyRate');
+    const hourlyDisplay = getEl('hourlyRateDisplay');
+
+    if (workDateInput) workDateInput.value = todayStr;
+    if (filterMonthInput) filterMonthInput.value = monthStr;
+
+    function updateHourly() {
+      if (!dailyInput || !hourlyDisplay) return;
+      const daily = parseFloat(dailyInput.value) || 0;
+      const hourly = daily / 8;
+      hourlyDisplay.value = hourly.toFixed(1) + " 元";
+      try {
+        localStorage.setItem('user_daily_rate', daily);
+      } catch (e) {}
+    }
+
+    if (dailyInput) {
+      const savedRate = localStorage.getItem('user_daily_rate');
+      if (savedRate) dailyInput.value = savedRate;
+      updateHourly();
+      dailyInput.addEventListener('input', () => {
+        updateHourly();
+        renderMonthView();
+      });
+    }
+
+    function getStoredRecords() {
+      try {
+        return JSON.parse(localStorage.getItem('work_records') || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveStoredRecords(records) {
+      try {
+        localStorage.setItem('work_records', JSON.stringify(records));
+      } catch (e) {
+        alert("儲存失敗，請檢查瀏覽器儲存空間。");
+      }
+    }
+
+    function getWeekdayName(dateStr) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length < 3) return '';
+      const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      return weekdays[dt.getDay()] || '';
+    }
+
+    // 計算核心：含每晚加班 100 元餐費
+    function calculatePay(dayType, totalWork, normalH, hourlyRate, dailyRate) {
+      const roundedTotal = Math.round(totalWork);
+      let extraPay = 0;
+      let ot134 = 0;
+      let ot167 = 0;
+      let ot200 = 0;
+      let ot267 = 0;
+      let otHours = 0;
+      let mealPay = 0;
+
+      if (dayType === 'normal') {
+        otHours = Math.max(0, roundedTotal - normalH);
+        if (otHours > 0) {
+          if (otHours <= 2) {
+            ot134 = otHours;
+            extraPay = ot134 * hourlyRate * 1.34;
+          } else {
+            ot134 = 2;
+            ot167 = otHours - 2;
+            extraPay = (2 * hourlyRate * 1.34) + (ot167 * hourlyRate * 1.67);
+          }
+          mealPay = 100;
+        }
+      } else if (dayType === 'rest') {
+        otHours = roundedTotal;
+        if (roundedTotal <= 2) {
+          ot134 = roundedTotal;
+          extraPay = ot134 * hourlyRate * 1.34;
+        } else if (roundedTotal <= 8) {
+          ot134 = 2;
+          ot167 = roundedTotal - 2;
+          extraPay = (2 * hourlyRate * 1.34) + (ot167 * hourlyRate * 1.67);
+        } else {
+          ot134 = 2;
+          ot167 = 6;
+          ot267 = roundedTotal - 8;
+          extraPay = (2 * hourlyRate * 1.34) + (6 * hourlyRate * 1.67) + (ot267 * hourlyRate * 2.67);
+        }
+        if (otHours > 0) mealPay = 100;
+      } else if (dayType === 'holiday') {
+        if (roundedTotal <= normalH) {
+          extraPay = dailyRate;
+        } else {
+          ot200 = roundedTotal - normalH;
+          extraPay = dailyRate + (ot200 * hourlyRate * 2.0);
+        }
+        otHours = Math.max(0, roundedTotal - normalH);
+        if (roundedTotal > 0) mealPay = 100;
+      } else if (dayType === 'special') {
+        ot200 = roundedTotal;
+        otHours = roundedTotal;
+        if (roundedTotal <= normalH) {
+          extraPay = dailyRate;
+        } else {
+          extraPay = dailyRate + ((roundedTotal - normalH) * hourlyRate * 2.0);
+        }
+        if (roundedTotal > 0) mealPay = 100;
+      }
+
+      extraPay += mealPay;
+
+      return {
+        otHours,
+        ot134,
+        ot167,
+        ot200,
+        ot267,
+        mealPay,
+        extraPay: Math.round(extraPay)
+      };
+    }
+
+    const typeLabels = {
+      normal: { name: '平日', cls: 'badge-normal' },
+      rest: { name: '休息日(一休)', cls: 'badge-rest' },
+      holiday: { name: '例假(一例)', cls: 'badge-holiday' },
+      special: { name: '特殊雙薪', cls: 'badge-special' }
+    };
+
+    // 儲存事件（安全提取 .value）
+    const saveBtn = getEl('saveBtn');
+    if (saveBtn) {
+      saveBtn.onclick = function() {
+        try {
+          const date = getVal('workDate');
+          const dayType = getVal('dayType', 'normal');
+          const start = getVal('startTime');
+          const end = getVal('endTime');
+          const note = getVal('workNote').trim();
+          const breakH = parseFloat(getVal('breakHours', '1.0')) || 0;
+          const normalH = parseFloat(getVal('normalHours', '8')) || 8;
+          const daily = parseFloat(dailyInput ? dailyInput.value : getVal('dailyRate', '2100')) || 0;
+          const hourly = daily / 8;
+
+          if (!date || !start || !end) {
+            alert('請完整填寫日期與上班、下班時間！');
+            return;
+          }
+
+          const [sh, sm] = start.split(':').map(Number);
+          const [eh, em] = end.split(':').map(Number);
+          let duration = (eh + em / 60) - (sh + sm / 60);
+          if (duration < 0) duration += 24;
+
+          const totalWork = Math.max(0, duration - breakH);
+          const calcResult = calculatePay(dayType, totalWork, normalH, hourly, daily);
+
+          let records = getStoredRecords();
+          records = records.filter(r => r.date !== date);
+          records.push({
+            id: Date.now(),
+            date,
+            dayType,
+            start,
+            end,
+            note: note || '無備註',
+            totalWork: totalWork.toFixed(1),
+            otHours: calcResult.otHours,
+            ot134: calcResult.ot134,
+            ot167: calcResult.ot167,
+            ot200: calcResult.ot200,
+            ot267: calcResult.ot267,
+            mealPay: calcResult.mealPay,
+            extraPay: calcResult.extraPay,
+            breakHours: breakH,
+            normalHours: normalH
+          });
+
+          records.sort((a, b) => b.date.localeCompare(a.date));
+          saveStoredRecords(records);
+
+          if (filterMonthInput) {
+            filterMonthInput.value = date.substring(0, 7);
+          }
+
+          renderMonthView();
+
+          const mealMsg = calcResult.mealPay > 0 ? ` (含餐費NT$ ${calcResult.mealPay})` : '';
+          alert(`已儲存！\n日期：${date} (${getWeekdayName(date)})\n類別：${typeLabels[dayType]?.name || '出勤'}\n總工時：${totalWork.toFixed(1)}h\n加成/加班費：NT$ ${calcResult.extraPay}${mealMsg}`);
+        } catch (err) {
+          alert("儲存過程發生錯誤：" + err.message);
+        }
+      };
+    } else {
+      alert("警告：找不到 saveBtn 按鈕元件，請確認 HTML 標籤！");
+    }
+
+    // 渲染月份明細（安全給值，不報錯）
+    function renderMonthView() {
+      try {
+        const selectedMonth = (filterMonthInput && filterMonthInput.value) ? filterMonthInput.value : monthStr;
+        const records = getStoredRecords();
+        const filtered = records.filter(r => r.date && r.date.startsWith(selectedMonth));
+        const daily = parseFloat(dailyInput ? dailyInput.value : getVal('dailyRate', '2100')) || 0;
+
+        let totalDays = filtered.length;
+        let totalOt134 = 0;
+        let totalOt167 = 0;
+        let totalOt200 = 0;
+        let totalOt267 = 0;
+        let totalMealPay = 0;
+        let mealDays = 0;
+        let totalExtraPay = 0;
+
+        const listContainer = getEl('recordList');
+        if (listContainer) listContainer.innerHTML = '';
+
+        filtered.forEach(item => {
+          const typeInfo = typeLabels[item.dayType || 'normal'] || typeLabels.normal;
+          const weekdayStr = getWeekdayName(item.date);
+          
+          let ot134 = Number(item.ot134 || 0);
+          let ot167 = Number(item.ot167 || 0);
+          let ot200 = Number(item.ot200 || 0);
+          let ot267 = Number(item.ot267 || 0);
+
+          if (item.ot134 === undefined) {
+            const legacyOt = Math.round(Number(item.otHours !== undefined ? item.otHours : item.roundedOt) || 0);
+            if (item.dayType === 'normal' || !item.dayType) {
+              ot134 = Math.min(2, legacyOt);
+              ot167 = Math.max(0, legacyOt - 2);
+            } else if (item.dayType === 'rest') {
+              ot134 = Math.min(2, legacyOt);
+              ot167 = Math.min(6, Math.max(0, legacyOt - 2));
+              ot267 = Math.max(0, legacyOt - 8);
+            } else if (item.dayType === 'special') {
+              ot200 = Math.round(Number(item.totalWork) || legacyOt);
+            } else if (item.dayType === 'holiday') {
+              ot200 = legacyOt;
+            }
+          }
+
+          totalOt134 += ot134;
+          totalOt167 += ot167;
+          totalOt200 += ot200;
+          totalOt267 += ot267;
+
+          const meal = item.mealPay !== undefined ? Number(item.mealPay) : ((ot134 + ot167 + ot200 + ot267) > 0 ? 100 : 0);
+          if (meal > 0) {
+            mealDays += 1;
+            totalMealPay += meal;
+          }
+
+          const payAmount = Number(item.extraPay !== undefined ? item.extraPay : (item.otPay || 0));
+          totalExtraPay += payAmount;
+
+          const details = [];
+          if (ot134 > 0) details.push(`1.34x: ${ot134}h`);
+          if (ot167 > 0) details.push(`1.67x: ${ot167}h`);
+          if (ot200 > 0) details.push(`2.0x: ${ot200}h`);
+          if (ot267 > 0) details.push(`2.67x: ${ot267}h`);
+          if (meal > 0) details.push(`餐費NT$${meal}`);
+          const detailStr = details.length > 0 ? ` (${details.join(', ')})` : '';
+
+          if (listContainer) {
+            const div = document.createElement('div');
+            div.className = 'record-item';
+            div.innerHTML = `
+              <div style="flex-grow: 1;">
+                <div>
+                  <strong style="font-size:15px;">${item.date}</strong>
+                  <span style="font-size:13px; color:#555; margin-left:4px;">(${weekdayStr})</span>
+                  <span class="badge ${typeInfo.cls}">${typeInfo.name}</span>
+                  <span style="font-size:13px; color:#555; margin-left:4px;">${item.start} ~ ${item.end}</span>
+                </div>
+                <div class="task-desc">內容：${item.note || '無備註'}</div>
+                <div style="font-size:13px; color:#666; margin-top:2px;">
+                  工時: ${item.totalWork}h | 計費時數: ${ot134 + ot167 + ot200 + ot267}h${detailStr} | 加給(含餐費): NT$${payAmount.toLocaleString()}
+                </div>
+              </div>
+              <div class="action-group">
+                <button class="text-btn edit-btn" onclick="editItem(${item.id})">編輯</button>
+                <button class="text-btn del-btn" onclick="deleteItem(${item.id})">刪除</button>
+              </div>
+            `;
+            listContainer.appendChild(div);
+          }
+        });
+
+        const totalAllOt = totalOt134 + totalOt167 + totalOt200 + totalOt267;
+        const basePay = totalDays * daily;
+        const grandTotal = basePay + totalExtraPay;
+
+        const setSafeText = (id, txt) => {
+          const el = getEl(id);
+          if (el) el.textContent = txt;
+        };
+
+        setSafeText('sumDays', `${totalDays} 天`);
+        setSafeText('sumBasePay', `NT$ ${basePay.toLocaleString()} (${totalDays}天 × ${daily}元)`);
+        setSafeText('sumTotalOt', `${totalAllOt} 小時`);
+        setSafeText('sumOt134', `${totalOt134} 小時`);
+        setSafeText('sumOt167', `${totalOt167} 小時`);
+        setSafeText('sumOt200', `${totalOt200} 小時`);
+        setSafeText('sumOt267', `${totalOt267} 小時`);
+        setSafeText('sumMealDays', `${mealDays} 天 (NT$ ${totalMealPay.toLocaleString()})`);
+        setSafeText('sumExtraPay', `NT$ ${totalExtraPay.toLocaleString()}`);
+        setSafeText('sumGrandTotal', `NT$ ${grandTotal.toLocaleString()}`);
+      } catch (err) {
+        alert("渲染月報清單錯誤：" + err.message);
+      }
+    }
+
+    // 編輯回填
+    window.editItem = function(id) {
+      const records = getStoredRecords();
+      const item = records.find(r => r.id === id);
+      if (!item) return;
+
+      if (getEl('workDate')) getEl('workDate').value = item.date;
+      if (getEl('dayType')) getEl('dayType').value = item.dayType || 'normal';
+      if (getEl('startTime')) getEl('startTime').value = item.start;
+      if (getEl('endTime')) getEl('endTime').value = item.end;
+      if (getEl('workNote')) getEl('workNote').value = item.note === '無備註' ? '' : item.note;
+      if (item.breakHours !== undefined && getEl('breakHours')) getEl('breakHours').value = item.breakHours;
+      if (item.normalHours !== undefined && getEl('normalHours')) getEl('normalHours').value = item.normalHours;
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.deleteItem = function(id) {
+      if (!confirm('確定刪除此筆記錄？')) return;
+      let records = getStoredRecords();
+      records = records.filter(r => r.id !== id);
+      saveStoredRecords(records);
+      renderMonthView();
+    };
+
+    // 重算按鈕
+    const recalcBtn = getEl('recalcMonthBtn');
+    if (recalcBtn) {
+      recalcBtn.onclick = function() {
+        const selectedMonth = (filterMonthInput && filterMonthInput.value) ? filterMonthInput.value : monthStr;
+        const daily = parseFloat(dailyInput ? dailyInput.value : getVal('dailyRate', '2100')) || 0;
+        const hourly = daily / 8;
+
+        if (!confirm(`確定要將 ${selectedMonth} 的紀錄依最新規則（含每晚加班100元餐費）重新計算嗎？`)) return;
+
+        let records = getStoredRecords();
+        records = records.map(item => {
+          if (item.date && item.date.startsWith(selectedMonth)) {
+            const type = item.dayType || 'normal';
+            const totalW = parseFloat(item.totalWork) || 0;
+            const normalH = parseFloat(item.normalHours) || 8;
+            const calcResult = calculatePay(type, totalW, normalH, hourly, daily);
+
+            return {
+              ...item,
+              dayType: type,
+              otHours: calcResult.otHours,
+              ot134: calcResult.ot134,
+              ot167: calcResult.ot167,
+              ot200: calcResult.ot200,
+              ot267: calcResult.ot267,
+              mealPay: calcResult.mealPay,
+              extraPay: calcResult.extraPay
+            };
+          }
+          return item;
+        });
+
+        saveStoredRecords(records);
+        renderMonthView();
+        alert(`${selectedMonth} 歷史紀錄已全部重新計算並更新！`);
+      };
+    }
+
+    // 匯出 CSV 按鈕
+    const exportBtn = getEl('exportCsvBtn');
+    if (exportBtn) {
+      exportBtn.onclick = function() {
+        const selectedMonth = (filterMonthInput && filterMonthInput.value) ? filterMonthInput.value : monthStr;
+        const records = getStoredRecords();
+        const daily = parseFloat(dailyInput ? dailyInput.value : getVal('dailyRate', '2100')) || 0;
+        const filtered = records
+          .filter(r => r.date && r.date.startsWith(selectedMonth))
+          .sort((a, b) => a.date.localeCompare(b.date));
+
+        if (filtered.length === 0) {
+          alert(`${selectedMonth} 目前沒有任何工時紀錄可供匯出！`);
+          return;
+        }
+
+        const headers = [
+          '日期', '星期幾', '出勤類別', '上班時間', '下班時間', '休息時數(h)', '總工時(h)', 
+          '1.34倍時數(h)', '1.67倍時數(h)', '2.00倍時數(h)', '2.67倍時數(h)', '總加成/加班時數(h)',
+          '當日本俸(元)', '加班餐費(元)', '額外加給(含餐費)(元)', '當日合計(元)', '工作內容與備註'
+        ];
+        
+        const rows = filtered.map(item => {
+          const weekdayStr = getWeekdayName(item.date);
+          const typeName = typeLabels[item.dayType || 'normal']?.name || '平日';
+          const ot134 = Number(item.ot134 || 0);
+          const ot167 = Number(item.ot167 || 0);
+          const ot200 = Number(item.ot200 || 0);
+          const ot267 = Number(item.ot267 || 0);
+          const totalOt = ot134 + ot167 + ot200 + ot267;
+          const mealPay = item.mealPay !== undefined ? Number(item.mealPay) : (totalOt > 0 ? 100 : 0);
+          const extraPay = Number(item.extraPay !== undefined ? item.extraPay : (item.otPay || 0));
+          const dayBase = daily;
+          const dayTotal = dayBase + extraPay;
+          const noteEscaped = (item.note || '').replace(/"/g, '""');
+
+          return [
+            item.date,
+            weekdayStr,
+            typeName,
+            item.start,
+            item.end,
+            item.breakHours !== undefined ? item.breakHours : '1.0',
+            item.totalWork,
+            ot134,
+            ot167,
+            ot200,
+            ot267,
+            totalOt,
+            dayBase,
+            mealPay,
+            extraPay,
+            dayTotal,
+            `"${noteEscaped}"`
+          ].join(',');
+        });
+
+        const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `工時薪資月報_${selectedMonth}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      };
+    }
+
+    // 備份與還原
+    const backupBtn = getEl('backupBtn');
+    if (backupBtn) {
+      backupBtn.onclick = function() {
+        const records = getStoredRecords();
+        if (records.length === 0) {
+          alert('目前沒有任何歷史資料可備份！');
+          return;
+        }
+        const blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `work_records_backup_${todayStr}.json`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      };
+    }
+
+    const restoreBtn = getEl('restoreBtn');
+    const restoreFileInput = getEl('restoreFileInput');
+    if (restoreBtn && restoreFileInput) {
+      restoreBtn.onclick = () => restoreFileInput.click();
+      restoreFileInput.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          try {
+            const imported = JSON.parse(event.target.result);
+            if (!Array.isArray(imported)) {
+              alert('匯入的檔案格式錯誤');
+              return;
+            }
+            let current = getStoredRecords();
+            const importedDates = new Set(imported.map(r => r.date));
+            current = current.filter(r => !importedDates.has(r.date));
+            const finalRecords = [...current, ...imported].sort((a, b) => b.date.localeCompare(a.date));
+            
+            saveStoredRecords(finalRecords);
+            renderMonthView();
+            alert(`成功還原 ${imported.length} 筆工時紀錄！`);
+          } catch (err) {
+            alert('解析檔案失敗，請確認是否為正確的 JSON 備份檔');
+          }
+        };
+        reader.readAsText(file);
+      };
+    }
+
+    if (filterMonthInput) {
+      filterMonthInput.onchange = renderMonthView;
+    }
+
+    // 載入即初始化渲染
+    renderMonthView();
+  });
+</script>
+
+</body>
+</html>
